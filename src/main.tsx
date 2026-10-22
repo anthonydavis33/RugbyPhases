@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { useStore } from './store';
 import { lastPlay, readSharedPlay, savePlay } from './storage';
+import './scene.css';
 import './styles.css';
 
 const shared = readSharedPlay();

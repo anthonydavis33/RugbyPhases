@@ -6,14 +6,6 @@
   --text: #e6ecf5;
   --muted: #8a97b0;
   --accent: #22c55e;
-  --attack: #2563eb;
-  --defence: #e11d48;
-  --pass: #fde047;
-  --kick: #fb923c;
-  --grass: #2f7d3a;
-  --grass-2: #2b7335;
-  --ingoal: #286b31;
-  --surround: #1f4f27;
   --radius: 10px;
   color-scheme: dark;
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -113,11 +105,12 @@ input[type='range'] {
   height: 100%;
   display: grid;
   grid-template-columns: 1fr 320px;
-  grid-template-rows: auto auto 1fr auto;
+  grid-template-rows: auto auto 1fr auto auto;
   grid-template-areas:
     'top top'
     'tools tools'
     'stage panel'
+    'player panel'
     'timeline panel';
 }
 
@@ -524,142 +517,162 @@ input[type='range'] {
   font-weight: 400;
 }
 
-/* ---------- pitch ---------- */
+/* ---------- player bar (between pitch and timeline) ---------- */
 
-.surround {
-  fill: var(--surround);
+.player-bar {
+  grid-area: player;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  padding: 8px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
-.grass {
-  fill: var(--grass);
+.player-bar p {
+  margin: 0;
 }
-.stripe {
-  fill: var(--grass-2);
+.pb-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
-.ingoal {
-  fill: var(--ingoal);
+.pb-head .icon-btn {
+  margin-left: 0;
 }
-.line {
-  stroke: rgba(255, 255, 255, 0.85);
-  stroke-width: 0.25;
+.pb-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
 }
-.line.dashed {
-  stroke-dasharray: 1.2 1.2;
-  stroke-width: 0.2;
-  stroke: rgba(255, 255, 255, 0.55);
+.pb-actions button {
+  min-height: 32px;
+  padding: 4px 10px;
+  font-size: 13px;
 }
-.posts line {
-  stroke: #fff;
-  stroke-width: 0.35;
-}
-.posts circle {
-  fill: #fff;
-}
-
-.player {
-  cursor: grab;
-}
-.player .hit {
-  fill: transparent;
-}
-.player .token {
-  stroke: #fff;
-  stroke-width: 0.28;
-}
-.player.attack .token {
-  fill: var(--attack);
-}
-.player.defence .token {
-  fill: var(--defence);
-}
-.player .ring {
-  fill: none;
-  stroke: var(--pass);
-  stroke-width: 0.4;
-}
-.player text {
-  text-anchor: middle;
-  dominant-baseline: central;
-  pointer-events: none;
-}
-.player .num {
-  fill: #fff;
-  font-size: 1.55px;
-  font-weight: 700;
-}
-.player .name {
-  fill: #fff;
-  font-size: 1.2px;
+.pb-actions button.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #05230f;
   font-weight: 600;
-  paint-order: stroke;
-  stroke: rgba(0, 0, 0, 0.6);
-  stroke-width: 0.3px;
+}
+.pb-actions .icon {
+  margin-right: 5px;
+}
+.pb-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pb-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  min-width: 108px;
+  font-size: 13px;
+}
+.pb-row input[type='range'] {
+  flex: 1;
+  min-width: 0;
+}
+.pb-row .at {
+  min-width: 34px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.kind.run {
+  background: #93c5fd;
 }
 
-.ball ellipse {
-  fill: #fafaf9;
-  stroke: #7c2d12;
-  stroke-width: 0.18;
-}
-.ball .shadow {
-  fill: rgba(0, 0, 0, 0.35);
-  stroke: none;
-}
+/* ---------- export ---------- */
 
-.annotations {
-  transition: opacity 0.2s;
+a.button {
+  display: inline-flex;
+  align-items: center;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 12px;
+  min-height: 38px;
+  color: inherit;
+  text-decoration: none;
 }
-.annotations.dim {
-  opacity: 0.3;
+.modal.export {
+  width: min(520px, 100%);
 }
-.run {
-  fill: none;
-  stroke-width: 0.4;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-dasharray: 1 0.7;
+.choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
-.run.attack {
-  stroke: #93c5fd;
+.choices button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 12px;
+  text-align: left;
+  white-space: normal;
 }
-.run.defence {
-  stroke: #fda4af;
+.choices button span {
+  color: var(--muted);
+  font-size: 13px;
 }
-.run.selected {
-  stroke-width: 0.6;
-  stroke-dasharray: none;
+.choices button.on {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
-.pass {
-  fill: none;
-  stroke: var(--pass);
-  stroke-width: 0.35;
-  stroke-dasharray: 0.5 0.5;
+.check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
 }
-.kick {
-  fill: none;
-  stroke: var(--kick);
-  stroke-width: 0.35;
-  stroke-dasharray: 0.3 0.6;
-  stroke-linecap: round;
+.check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
 }
-.arrowhead.attack {
-  fill: #93c5fd;
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
 }
-.arrowhead.defence {
-  fill: #fda4af;
+.progress-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
 }
-.arrowhead.pass {
-  fill: var(--pass);
+.progress {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--bg);
+  overflow: hidden;
 }
-.arrowhead.kick {
-  fill: var(--kick);
+.progress div {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.15s;
 }
-.stroke {
-  fill: none;
-  stroke: #fff;
-  stroke-width: 0.45;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  opacity: 0.9;
+.preview {
+  margin-top: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.preview video,
+.preview img {
+  display: block;
+  max-width: 100%;
+  max-height: 60dvh;
+}
+.error {
+  color: #fda4af;
 }
 
 /* ---------- phones & narrow tablets ---------- */
@@ -669,8 +682,8 @@ input[type='range'] {
     height: auto;
     min-height: 100%;
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
-    grid-template-areas: 'top' 'tools' 'stage' 'timeline' 'panel';
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto auto;
+    grid-template-areas: 'top' 'tools' 'stage' 'player' 'timeline' 'panel';
   }
   .stage {
     height: 62dvh;
@@ -679,8 +692,17 @@ input[type='range'] {
   .panel {
     border-left: none;
   }
-  .brand-name {
+  .brand {
     display: none;
+  }
+  .topbar {
+    gap: 8px;
+  }
+  .topbar-actions {
+    gap: 6px;
+  }
+  .topbar-actions button {
+    padding: 7px 10px;
   }
   .toolbar {
     gap: 10px;
@@ -696,5 +718,11 @@ input[type='range'] {
   .toast {
     bottom: auto;
     top: 120px;
+  }
+  .player-bar {
+    padding: 8px 10px;
+  }
+  .pb-head strong + .muted {
+    display: none;
   }
 }

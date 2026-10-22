@@ -7,6 +7,28 @@ import { makePreset } from './model/presets';
 
 export type Tool = 'select' | 'run' | 'pass' | 'kick';
 export type View = 'full' | 'fit';
+/** ns: attack runs up the screen. ew: attack runs left to right. */
+export type Orientation = 'ns' | 'ew';
+
+/** The player whose timing box is open (docked in the corner of the pitch). */
+export interface Popover {
+  id: string;
+}
+
+/** An action started from a player's popover, waiting for the next drag (run) or tap (receiver). */
+export interface Pending {
+  kind: 'run' | BallAction;
+  id: string;
+}
+
+const ORIENTATION_KEY = 'rugbyphases:orientation';
+function savedOrientation(): Orientation {
+  try {
+    return localStorage.getItem(ORIENTATION_KEY) === 'ew' ? 'ew' : 'ns';
+  } catch {
+    return 'ns';
+  }
+}
 
 let cache: { play: Play | null; tl: Timeline | null } = { play: null, tl: null };
 
@@ -36,6 +58,10 @@ interface State {
   tool: Tool;
   selected: string | null;
   view: View;
+  orientation: Orientation;
+  exportOpen: boolean;
+  popover: Popover | null;
+  pending: Pending | null;
   toast: string | null;
   libraryOpen: boolean;
 
@@ -52,6 +78,13 @@ interface State {
   setTool(tool: Tool): void;
   select(id: string | null): void;
   setView(view: View): void;
+  setOrientation(o: Orientation): void;
+  setExportOpen(open: boolean): void;
+  openPopover(p: Popover): void;
+  closePopover(): void;
+  startPending(kind: Pending['kind']): void;
+  finishPending(): void;
+  cancelPending(): void;
   setRate(rate: number): void;
   setLibraryOpen(open: boolean): void;
   notify(msg: string): void;
@@ -73,7 +106,7 @@ interface State {
 export const useStore = create<State>()((set, get) => {
   /** After the play changes, keep the playhead on a valid phase start. */
   const settle = () => {
-    const { play, phaseIdx, selected } = get();
+    const { play, phaseIdx, selected, popover } = get();
     const tl = timelineOf(play);
     const i = clamp(phaseIdx, 0, tl.phases.length - 1);
     set({
@@ -81,6 +114,7 @@ export const useStore = create<State>()((set, get) => {
       time: tl.phases[i].start,
       playing: false,
       selected: selected && play.players.some((p) => p.id === selected) ? selected : null,
+      popover: popover && play.players.some((p) => p.id === popover.id) ? popover : null,
     });
   };
   const phase = (p: Play) => p.phases[get().phaseIdx];
@@ -100,6 +134,10 @@ export const useStore = create<State>()((set, get) => {
     tool: 'select',
     selected: null,
     view: 'fit',
+    orientation: savedOrientation(),
+    exportOpen: false,
+    popover: null,
+    pending: null,
     toast: null,
     libraryOpen: false,
 
@@ -132,7 +170,7 @@ export const useStore = create<State>()((set, get) => {
       settle();
     },
     load(play) {
-      set({ play, past: [], future: [], lastKey: null, phaseIdx: 0, time: 0, playing: false, selected: null });
+      set({ play, past: [], future: [], lastKey: null, phaseIdx: 0, time: 0, playing: false, selected: null, popover: null, pending: null });
     },
 
     seek(t) {
@@ -142,12 +180,18 @@ export const useStore = create<State>()((set, get) => {
     },
     goPhase(i) {
       const tl = timelineOf(get().play);
-      set({ phaseIdx: i, time: tl.phases[i].start, playing: false });
+      set({
+        phaseIdx: i,
+        time: tl.phases[i].start,
+        playing: false,
+        popover: i === get().phaseIdx ? get().popover : null,
+        pending: i === get().phaseIdx ? get().pending : null,
+      });
     },
     togglePlay() {
       const { playing, time, play } = get();
       if (!playing && time >= timelineOf(play).total - 0.05) set({ time: 0, phaseIdx: 0 });
-      set({ playing: !playing });
+      set({ playing: !playing, pending: null });
     },
     tick(dt) {
       const { time, rate, play } = get();
@@ -157,9 +201,30 @@ export const useStore = create<State>()((set, get) => {
       else set({ time: t, phaseIdx: phaseIndexAt(tl, t) });
     },
 
-    setTool: (tool) => set({ tool }),
+    setTool: (tool) => set({ tool, popover: null, pending: null }),
     select: (selected) => set({ selected }),
     setView: (view) => set({ view }),
+    setOrientation(orientation) {
+      set({ orientation });
+      try {
+        localStorage.setItem(ORIENTATION_KEY, orientation);
+      } catch {
+        /* ignore */
+      }
+    },
+    setExportOpen: (exportOpen) => set({ exportOpen, playing: false }),
+    openPopover: (popover) => set({ popover }),
+    closePopover: () => set({ popover: null }),
+    startPending(kind) {
+      const popover = get().popover;
+      if (popover) set({ pending: { kind, id: popover.id }, popover: null, selected: popover.id });
+    },
+    finishPending() {
+      const pending = get().pending;
+      // Reopen the box so the new pass or run can be timed straight away.
+      set({ pending: null, popover: pending ? { id: pending.id } : null });
+    },
+    cancelPending: () => set({ pending: null }),
     setRate: (rate) => set({ rate }),
     setLibraryOpen: (libraryOpen) => set({ libraryOpen, playing: false }),
     notify(msg) {

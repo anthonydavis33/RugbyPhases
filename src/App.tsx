@@ -1,9 +1,11 @@
 import { useEffect } from 'react';
-import { useStore } from './store';
+import { timelineOf, useStore } from './store';
 import { Board } from './components/Board';
 import { Hint, NoteOverlay, Timeline, Toast, Toolbar, TopBar } from './components/Controls';
 import { Inspector } from './components/Inspector';
 import { Library } from './components/Library';
+import { ExportDialog } from './components/ExportDialog';
+import { PlayerPopover } from './components/PlayerPopover';
 
 export function App() {
   const playing = useStore((s) => s.playing);
@@ -42,11 +44,20 @@ export function App() {
         st.togglePlay();
       } else if ((e.key === 'Delete' || e.key === 'Backspace') && st.selected) {
         st.removePlayer(st.selected);
+      } else if (st.popover && (k === 'm' || k === 'p' || k === 'k')) {
+        // With a player's box open, these act on that player.
+        const ph = timelineOf(st.play).phases[st.phaseIdx];
+        if (k === 'm') st.startPending('run');
+        else if (ph.endHolder === st.popover.id) st.startPending(k === 'p' ? 'pass' : 'kick');
       } else if (k === 'm') st.setTool('select');
       else if (k === 'r') st.setTool('run');
       else if (k === 'p') st.setTool('pass');
       else if (k === 'k') st.setTool('kick');
-      else if (e.key === 'Escape') st.select(null);
+      else if (e.key === 'Escape') {
+        st.cancelPending();
+        st.closePopover();
+        st.select(null);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -61,12 +72,14 @@ export function App() {
         <Hint />
         <NoteOverlay />
       </main>
+      <PlayerPopover />
       <Timeline />
       <aside className="panel">
         <Inspector />
       </aside>
       <Toast />
       <Library />
+      <ExportDialog />
     </div>
   );
 }

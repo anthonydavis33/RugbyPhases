@@ -1,0 +1,151 @@
+/* Pitch, players and ball. Also embedded in exported frames, so keep it self-contained. */
+:root {
+  --attack: #2563eb;
+  --defence: #e11d48;
+  --pass: #fde047;
+  --kick: #fb923c;
+  --grass: #2f7d3a;
+  --grass-2: #2b7335;
+  --ingoal: #286b31;
+  --surround: #1f4f27;
+}
+
+.surround {
+  fill: var(--surround);
+}
+.grass {
+  fill: var(--grass);
+}
+.stripe {
+  fill: var(--grass-2);
+}
+.ingoal {
+  fill: var(--ingoal);
+}
+.line {
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 0.25;
+}
+.line.dashed {
+  stroke-dasharray: 1.2 1.2;
+  stroke-width: 0.2;
+  stroke: rgba(255, 255, 255, 0.55);
+}
+.posts line {
+  stroke: #fff;
+  stroke-width: 0.35;
+}
+.posts circle {
+  fill: #fff;
+}
+
+.player,
+.hit {
+  cursor: grab;
+}
+.hit {
+  fill: transparent;
+}
+.player .token {
+  stroke: #fff;
+  stroke-width: 0.28;
+}
+.player.attack .token {
+  fill: var(--attack);
+}
+.player.defence .token {
+  fill: var(--defence);
+}
+.player .ring {
+  fill: none;
+  stroke: var(--pass);
+  stroke-width: 0.4;
+}
+.player text {
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+.player .num {
+  fill: #fff;
+  font-size: 1.55px;
+  font-weight: 700;
+}
+.player .name {
+  fill: #fff;
+  font-size: 1.2px;
+  font-weight: 600;
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.6);
+  stroke-width: 0.3px;
+}
+
+.ball ellipse {
+  fill: #fafaf9;
+  stroke: #7c2d12;
+  stroke-width: 0.18;
+}
+.ball .shadow {
+  fill: rgba(0, 0, 0, 0.35);
+  stroke: none;
+}
+
+.annotations {
+  transition: opacity 0.2s;
+}
+.annotations.dim {
+  opacity: 0.5;
+}
+.run {
+  fill: none;
+  stroke-width: 0.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1 0.7;
+}
+.run.attack {
+  stroke: #93c5fd;
+}
+.run.defence {
+  stroke: #fda4af;
+}
+.run.selected {
+  stroke-width: 0.6;
+  stroke-dasharray: none;
+}
+.pass {
+  fill: none;
+  stroke: var(--pass);
+  stroke-width: 0.35;
+  stroke-dasharray: 0.5 0.5;
+}
+.kick {
+  fill: none;
+  stroke: var(--kick);
+  stroke-width: 0.35;
+  stroke-dasharray: 0.3 0.6;
+  stroke-linecap: round;
+}
+.arrowhead.attack {
+  fill: #93c5fd;
+}
+.arrowhead.defence {
+  fill: #fda4af;
+}
+.arrowhead.pass {
+  fill: var(--pass);
+}
+.arrowhead.kick {
+  fill: var(--kick);
+}
+.stroke {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 0.45;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.9;
+}
+.player text {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}

@@ -5,6 +5,7 @@ export function TopBar() {
   const name = useStore((s) => s.play.name);
   const commit = useStore((s) => s.commit);
   const setLibraryOpen = useStore((s) => s.setLibraryOpen);
+  const setExportOpen = useStore((s) => s.setExportOpen);
 
   const share = async () => {
     const st = useStore.getState();
@@ -35,6 +36,7 @@ export function TopBar() {
       />
       <div className="topbar-actions">
         <button onClick={() => setLibraryOpen(true)}>Plays</button>
+        <button onClick={() => setExportOpen(true)}>Export</button>
         <button className="primary" onClick={share}>
           Share
         </button>
@@ -53,6 +55,7 @@ const TOOLS: { tool: Tool; label: string; icon: string; key: string }[] = [
 export function Toolbar() {
   const tool = useStore((s) => s.tool);
   const view = useStore((s) => s.view);
+  const orientation = useStore((s) => s.orientation);
   const canUndo = useStore((s) => s.past.length > 0);
   const canRedo = useStore((s) => s.future.length > 0);
   const st = useStore.getState();
@@ -90,6 +93,14 @@ export function Toolbar() {
         <button onClick={() => st.setView(view === 'full' ? 'fit' : 'full')}>
           {view === 'full' ? 'Zoom to play' : 'Full pitch'}
         </button>
+        <button
+          onClick={() => st.setOrientation(orientation === 'ns' ? 'ew' : 'ns')}
+          title="Switch pitch direction"
+          aria-label={orientation === 'ns' ? 'Pitch runs north–south' : 'Pitch runs east–west'}
+        >
+          <span className="icon">{orientation === 'ns' ? '↕' : '↔'}</span>
+          {orientation === 'ns' ? 'N/S' : 'E/W'}
+        </button>
       </div>
     </div>
   );
@@ -100,12 +111,19 @@ export function Hint() {
   const phaseIdx = useStore((s) => s.phaseIdx);
   const playing = useStore((s) => s.playing);
   const play = useStore((s) => s.play);
+  const pending = useStore((s) => s.pending);
   if (playing) return null;
   const holderId = timelineOf(play).phases[phaseIdx].endHolder;
   const holder = play.players.find((p) => p.id === holderId);
+  const pendingNum = pending && play.players.find((p) => p.id === pending.id)?.num;
 
   let text: string;
-  if (tool === 'select') {
+  if (pending) {
+    text =
+      pending.kind === 'run'
+        ? `Drag anywhere to draw #${pendingNum}’s run · Esc to cancel`
+        : `Tap who #${pendingNum} ${pending.kind === 'kick' ? 'kicks' : 'passes'} to · Esc to cancel`;
+  } else if (tool === 'select') {
     text = phaseIdx === 0 ? 'Drag players to set the starting shape' : 'Tap a player to edit them';
   } else if (tool === 'run') {
     text = 'Drag from a player to draw their run';
