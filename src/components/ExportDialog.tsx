@@ -20,6 +20,7 @@ function ExportPanel() {
   const play = useStore((s) => s.play);
   const view = useStore((s) => s.view);
   const orientation = useStore((s) => s.orientation);
+  const option = useStore((s) => s.activeOption);
   const close = () => useStore.getState().setExportOpen(false);
 
   const [mp4, setMp4] = useState<boolean | null>(null);
@@ -52,11 +53,11 @@ function ExportPanel() {
       const m = await loadExporter();
       const blob = await m.exportPlay(
         play,
-        { format, lines, notes, title, view, orientation },
+        { format, lines, notes, title, view, orientation, option },
         (progress) => setStatus({ kind: 'working', progress }),
         ac.signal,
       );
-      const file = new File([blob], m.fileName(play, format), { type: blob.type });
+      const file = new File([blob], m.fileName(play, format, option), { type: blob.type });
       setStatus({ kind: 'done', file, url: URL.createObjectURL(file) });
     } catch (e) {
       if ((e as Error).name === 'AbortError') setStatus({ kind: 'idle' });
@@ -136,7 +137,8 @@ function ExportPanel() {
             </label>
             <p className="muted">
               Uses the current view: {orientation === 'ns' ? 'north–south' : 'east–west'},{' '}
-              {view === 'full' ? 'full pitch' : 'zoomed to the play'}.
+              {view === 'full' ? 'full pitch' : 'zoomed to the play'}
+              {option ? ', playing the selected option' : ''}.
             </p>
 
             {status.kind === 'error' && <p className="error">{status.message}</p>}

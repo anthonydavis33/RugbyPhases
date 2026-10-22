@@ -43,6 +43,11 @@ export interface Pass {
   /** Seconds into the phase when the ball leaves the passer's hands. */
   at: number;
   kind: BallAction;
+  /**
+   * Set on an option: the id of the main-line pass this is an alternative to
+   * ("10 passes to 12, or to 13"). Options are drawn but only played when chosen.
+   */
+  altOf?: string;
 }
 
 export interface Phase {

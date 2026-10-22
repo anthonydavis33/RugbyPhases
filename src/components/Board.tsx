@@ -22,9 +22,22 @@ export function Board() {
   const view = useStore((s) => s.view);
   const orientation = useStore((s) => s.orientation);
   const playing = useStore((s) => s.playing);
+  const tool = useStore((s) => s.tool);
+  const pending = useStore((s) => s.pending);
+  useStore((s) => s.activeOption); // re-render when a different option is chosen
 
   const tl = timelineOf(play);
   const frame = frameAt(tl, time);
+  // While choosing who gets the ball, the passer's teammates are highlighted.
+  const passer = playing
+    ? null
+    : pending
+      ? pending.kind === 'run'
+        ? null
+        : pending.id
+      : tool === 'pass' || tool === 'kick'
+        ? tl.phases[phaseIdx].endHolder
+        : null;
   const vertical = orientation === 'ns';
   const vb = viewBoxOf(view === 'full' ? FULL : fitBox(tl), vertical);
 
@@ -73,7 +86,8 @@ export function Board() {
     } else if (tapped === pending.id) {
       st.notify('Tap the player receiving the ' + pending.kind);
     } else {
-      st.addPass(tapped, pending.kind);
+      if (pending.kind === 'option') st.addOption(pending.altOf!, tapped);
+      else st.addPass(tapped, pending.kind);
       st.finishPending();
     }
     return true;
@@ -180,6 +194,7 @@ export function Board() {
           vertical={vertical}
           dimLines={playing}
           selected={selected}
+          passer={passer}
           stroke={stroke}
           gRef={gRef}
           onPlayerDown={onPlayerDown}

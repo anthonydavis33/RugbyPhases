@@ -1,8 +1,15 @@
 import type { MouseEvent, PointerEvent, Ref } from 'react';
-import { positionIn, type Frame, type PhaseTrack, type Timeline } from '../model/engine';
+import { positionIn, type Frame, type PassTrack, type PhaseTrack, type Timeline } from '../model/engine';
 import { dist, toPath } from '../model/geometry';
 import type { Play, Team, Vec } from '../model/types';
 import { Pitch } from './Pitch';
+
+/** Player token sizes, in metres. */
+const TOKEN_R = 1.25;
+const RING_R = 1.8;
+/** Touch target: bigger than the token so it is easy to hit with a finger. */
+const HIT_R = 2.4;
+const BALL_OFFSET = 1;
 
 /** A rectangle of the pitch, in pitch metres. */
 export interface Box {
@@ -59,6 +66,8 @@ interface SceneProps {
   showLines?: boolean;
   dimLines?: boolean;
   selected?: string | null;
+  /** While choosing a receiver: the player with the ball. Their teammates are highlighted. */
+  passer?: string | null;
   stroke?: Vec[] | null;
   gRef?: Ref<SVGGElement>;
   onPlayerDown?: (e: PointerEvent, id: string) => void;
@@ -74,6 +83,7 @@ export function Scene({
   showLines = true,
   dimLines = false,
   selected = null,
+  passer = null,
   stroke = null,
   gRef,
   onPlayerDown,
@@ -84,11 +94,15 @@ export function Scene({
   const upright = vertical ? 'rotate(90)' : undefined;
   const ball = frame.ball;
   const ballScale = ball ? 1 + ball.height / 10 : 1;
+  const passerTeam = passer ? teamOf[passer] : null;
+
+  const pickClass = (id: string) =>
+    !passerTeam ? '' : id === passer ? ' passer' : teamOf[id] === passerTeam ? ' target' : ' faded';
 
   return (
     <>
       <defs>
-        {(['attack', 'defence', 'pass', 'kick'] as const).map((k) => (
+        {(['attack', 'defence', 'pass', 'kick', 'option'] as const).map((k) => (
           <marker
             key={k}
             id={`arrow-${k}`}
@@ -96,8 +110,8 @@ export function Scene({
             refX="7"
             refY="5"
             markerUnits="userSpaceOnUse"
-            markerWidth="2.2"
-            markerHeight="2.2"
+            markerWidth="2"
+            markerHeight="2"
             orient="auto"
           >
             <path d="M0 0L10 5L0 10z" className={`arrowhead ${k}`} />
@@ -120,7 +134,7 @@ export function Scene({
                   key={p.id}
                   cx={pos.x}
                   cy={pos.y}
-                  r={2.8}
+                  r={HIT_R}
                   className="hit"
                   onPointerDown={(e) => onPlayerDown(e, p.id)}
                   onContextMenu={onPlayerMenu && ((e) => onPlayerMenu(e, p.id))}
@@ -137,19 +151,20 @@ export function Scene({
             <g
               key={p.id}
               data-id={p.id}
-              className={`player ${p.team}`}
+              className={`player ${p.team}${pickClass(p.id)}`}
               transform={`translate(${pos.x.toFixed(2)} ${pos.y.toFixed(2)})`}
               onPointerDown={onPlayerDown && ((e) => onPlayerDown(e, p.id))}
               onContextMenu={onPlayerMenu && ((e) => onPlayerMenu(e, p.id))}
             >
-              {selected === p.id && <circle r={2.25} className="ring" />}
-              <circle r={1.55} className="token" />
+              {(selected === p.id || passer === p.id) && <circle r={RING_R} className="ring" />}
+              {passerTeam && p.id !== passer && teamOf[p.id] === passerTeam && <circle r={RING_R} className="pulse" />}
+              <circle r={TOKEN_R} className="token" />
               <g transform={upright}>
                 <text className="num" dy="0.05em">
                   {p.num}
                 </text>
                 {p.name && (
-                  <text className="name" y={2.9}>
+                  <text className="name" y={2.35}>
                     {p.name}
                   </text>
                 )}
@@ -160,19 +175,33 @@ export function Scene({
 
         {ball && (
           <g className="ball" pointerEvents="none">
-            {ball.height > 0.2 && <ellipse cx={ball.pos.x} cy={ball.pos.y} rx={0.7} ry={0.45} className="shadow" />}
+            {ball.height > 0.2 && <ellipse cx={ball.pos.x} cy={ball.pos.y} rx={0.6} ry={0.4} className="shadow" />}
             <g
-              transform={`translate(${(ball.pos.x + (ball.holder ? 1.2 : 0)).toFixed(2)} ${(
-                ball.pos.y - (ball.holder ? 1.2 : 0)
+              transform={`translate(${(ball.pos.x + (ball.holder ? BALL_OFFSET : 0)).toFixed(2)} ${(
+                ball.pos.y - (ball.holder ? BALL_OFFSET : 0)
               ).toFixed(2)}) scale(${ballScale})`}
             >
-              <ellipse rx={0.85} ry={0.55} transform="rotate(-30)" />
+              <ellipse rx={0.75} ry={0.48} transform="rotate(-30)" />
             </g>
           </g>
         )}
       </g>
     </>
   );
+}
+
+/** A pass (straight) or kick (bowed sideways so it reads differently) from passer to receiver. */
+function BallLine({ ph, pt, className, marker }: { ph: PhaseTrack; pt: PassTrack; className: string; marker: string }) {
+  const a = positionIn(ph, pt.from, pt.pass.at);
+  const b = positionIn(ph, pt.pass.to, pt.pass.at + pt.flight);
+  if (pt.pass.kind === 'pass') {
+    return <path d={toPath([a, b])} className={className} markerEnd={`url(#arrow-${marker})`} />;
+  }
+  const d = dist(a, b) || 1;
+  const bow = Math.min(d * 0.25, 8);
+  const cx = (a.x + b.x) / 2 - ((b.y - a.y) / d) * bow;
+  const cy = (a.y + b.y) / 2 + ((b.x - a.x) / d) * bow;
+  return <path d={`M${a.x} ${a.y}Q${cx} ${cy} ${b.x} ${b.y}`} className={className} markerEnd={`url(#arrow-${marker})`} />;
 }
 
 function Annotations({
@@ -196,26 +225,12 @@ function Annotations({
           markerEnd={`url(#arrow-${teamOf[id]})`}
         />
       ))}
-      {ph.passes.map((pt) => {
-        const a = positionIn(ph, pt.from, pt.pass.at);
-        const b = positionIn(ph, pt.pass.to, pt.pass.at + pt.flight);
-        if (pt.pass.kind === 'pass') {
-          return <path key={pt.pass.id} d={toPath([a, b])} className="pass" markerEnd="url(#arrow-pass)" />;
-        }
-        // Kicks bow sideways so they read differently from passes.
-        const d = dist(a, b) || 1;
-        const bow = Math.min(d * 0.25, 8);
-        const cx = (a.x + b.x) / 2 - ((b.y - a.y) / d) * bow;
-        const cy = (a.y + b.y) / 2 + ((b.x - a.x) / d) * bow;
-        return (
-          <path
-            key={pt.pass.id}
-            d={`M${a.x} ${a.y}Q${cx} ${cy} ${b.x} ${b.y}`}
-            className="kick"
-            markerEnd="url(#arrow-kick)"
-          />
-        );
-      })}
+      {ph.options.map((pt) => (
+        <BallLine key={pt.pass.id} ph={ph} pt={pt} className={`option ${pt.pass.kind}-option`} marker="option" />
+      ))}
+      {ph.passes.map((pt) => (
+        <BallLine key={pt.pass.id} ph={ph} pt={pt} className={pt.pass.kind} marker={pt.pass.kind} />
+      ))}
     </g>
   );
 }

@@ -17,6 +17,8 @@ export interface ExportOptions {
   title: boolean;
   view: View;
   orientation: Orientation;
+  /** Option pass to play instead of the main line (see buildTimeline). */
+  option: string | null;
 }
 
 const SETTINGS: Record<ExportFormat, { fps: number; maxDim: number }> = {
@@ -35,8 +37,15 @@ export async function canExportMp4() {
   }
 }
 
-export const fileName = (play: Play, format: ExportFormat) =>
-  `${play.name.trim().replace(/[^\w-]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'play'}.${format}`;
+const slug = (s: string) =>
+  s.trim().replace(/[^\w-]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase();
+
+/** e.g. "crash-ball.mp4", or "crash-ball-option-13.mp4" when an option is exported. */
+export const fileName = (play: Play, format: ExportFormat, option: string | null = null) => {
+  const opt = option && play.phases.flatMap((ph) => ph.passes).find((p) => p.id === option);
+  const to = opt && play.players.find((p) => p.id === opt.to);
+  return `${slug(play.name) || 'play'}${to ? `-option-${to.num}` : ''}.${format}`;
+};
 
 const even = (n: number) => Math.max(2, Math.round(n / 2) * 2);
 
@@ -166,7 +175,7 @@ export async function exportPlay(
   onProgress: (fraction: number) => void,
   signal: AbortSignal,
 ): Promise<Blob> {
-  const tl = buildTimeline(play);
+  const tl = buildTimeline(play, opts.option);
   const r = new FrameRenderer(play, tl, opts);
   const { fps } = SETTINGS[opts.format];
   const frames = Math.ceil((LEAD_IN + tl.total + HOLD_END) * fps);

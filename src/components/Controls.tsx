@@ -112,6 +112,7 @@ export function Hint() {
   const playing = useStore((s) => s.playing);
   const play = useStore((s) => s.play);
   const pending = useStore((s) => s.pending);
+  useStore((s) => s.activeOption);
   if (playing) return null;
   const holderId = timelineOf(play).phases[phaseIdx].endHolder;
   const holder = play.players.find((p) => p.id === holderId);
@@ -122,7 +123,9 @@ export function Hint() {
     text =
       pending.kind === 'run'
         ? `Drag anywhere to draw #${pendingNum}’s run · Esc to cancel`
-        : `Tap who #${pendingNum} ${pending.kind === 'kick' ? 'kicks' : 'passes'} to · Esc to cancel`;
+        : pending.kind === 'option'
+          ? `Tap #${pendingNum}’s other option · Esc to cancel`
+          : `Tap who #${pendingNum} ${pending.kind === 'kick' ? 'kicks' : 'passes'} to · Esc to cancel`;
   } else if (tool === 'select') {
     text = phaseIdx === 0 ? 'Drag players to set the starting shape' : 'Tap a player to edit them';
   } else if (tool === 'run') {
@@ -149,6 +152,7 @@ export function Timeline() {
   const playing = useStore((s) => s.playing);
   const rate = useStore((s) => s.rate);
   const phaseIdx = useStore((s) => s.phaseIdx);
+  useStore((s) => s.activeOption); // the chosen option changes timings
   const tl = timelineOf(play);
   const st = useStore.getState();
   const rates = [0.5, 1, 2];
@@ -191,7 +195,45 @@ export function Timeline() {
         <button className="add" onClick={st.addPhase}>
           + Phase
         </button>
+        <button className="add" onClick={() => st.setPickerOpen(true)} title="Add the phases of another saved play">
+          + From play
+        </button>
       </div>
+      <OptionPicker />
+    </div>
+  );
+}
+
+/** Choose whether playback (and export) follows the main line or one of the pass options. */
+function OptionPicker() {
+  const play = useStore((s) => s.play);
+  const active = useStore((s) => s.activeOption);
+  const st = useStore.getState();
+  const main = timelineOf(play, null);
+  const num = (id: string | undefined) => play.players.find((p) => p.id === id)?.num;
+
+  const options = play.phases.flatMap((phase, i) =>
+    phase.passes
+      .filter((p) => p.altOf)
+      .map((opt) => {
+        const from = main.phases[i].passes.find((t) => t.pass.id === opt.altOf)?.from;
+        const ph = play.phases.length > 1 ? `P${i + 1} ` : '';
+        return { id: opt.id, label: `${ph}#${num(from)} → #${num(opt.to)}${opt.kind === 'kick' ? ' kick' : ''}` };
+      }),
+  );
+  if (options.length === 0) return null;
+
+  return (
+    <div className="options-row">
+      <span className="muted">Play</span>
+      <button className={active === null ? 'on' : ''} onClick={() => st.setActiveOption(null)}>
+        Main line
+      </button>
+      {options.map((o) => (
+        <button key={o.id} className={`opt${active === o.id ? ' on' : ''}`} onClick={() => st.setActiveOption(o.id)}>
+          Option {o.label}
+        </button>
+      ))}
     </div>
   );
 }

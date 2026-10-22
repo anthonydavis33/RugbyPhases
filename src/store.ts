@@ -17,8 +17,10 @@ export interface Popover {
 
 /** An action started from a player's popover, waiting for the next drag (run) or tap (receiver). */
 export interface Pending {
-  kind: 'run' | BallAction;
+  kind: 'run' | BallAction | 'option';
   id: string;
+  /** For an option: the main-line pass it is an alternative to. */
+  altOf?: string;
 }
 
 const ORIENTATION_KEY = 'rugbyphases:orientation';
@@ -30,12 +32,19 @@ function savedOrientation(): Orientation {
   }
 }
 
-let cache: { play: Play | null; tl: Timeline | null } = { play: null, tl: null };
+const cache = new Map<string, { play: Play; tl: Timeline }>();
 
-/** Timeline for a play, memoised on the play object (plays are immutable). */
-export function timelineOf(play: Play): Timeline {
-  if (cache.play !== play) cache = { play, tl: buildTimeline(play) };
-  return cache.tl!;
+/**
+ * Timeline for a play, memoised on the play object (plays are immutable).
+ * Defaults to the option currently chosen for playback; pass null for the main line.
+ */
+export function timelineOf(play: Play, option: string | null = useStore.getState().activeOption): Timeline {
+  const key = option ?? '';
+  const hit = cache.get(key);
+  if (hit?.play === play) return hit.tl;
+  const tl = buildTimeline(play, option);
+  cache.set(key, { play, tl });
+  return tl;
 }
 
 const HISTORY = 100;
@@ -60,8 +69,11 @@ interface State {
   view: View;
   orientation: Orientation;
   exportOpen: boolean;
+  pickerOpen: boolean;
   popover: Popover | null;
   pending: Pending | null;
+  /** Option pass being played instead of its main-line pass, or null for the main line. */
+  activeOption: string | null;
   toast: string | null;
   libraryOpen: boolean;
 
@@ -80,9 +92,11 @@ interface State {
   setView(view: View): void;
   setOrientation(o: Orientation): void;
   setExportOpen(open: boolean): void;
+  setPickerOpen(open: boolean): void;
   openPopover(p: Popover): void;
   closePopover(): void;
-  startPending(kind: Pending['kind']): void;
+  startPending(kind: Pending['kind'], altOf?: string): void;
+  setActiveOption(id: string | null): void;
   finishPending(): void;
   cancelPending(): void;
   setRate(rate: number): void;
@@ -90,6 +104,7 @@ interface State {
   notify(msg: string): void;
 
   addPhase(): void;
+  appendPlay(source: Play): void;
   deletePhase(i: number): void;
   addPlayer(team: Team): void;
   removePlayer(id: string): void;
@@ -99,6 +114,7 @@ interface State {
   updateRun(id: string, patch: Partial<Run>, key?: string): void;
   clearRun(id: string): void;
   addPass(to: string, kind: BallAction): void;
+  addOption(altOf: string, to: string): void;
   updatePass(passId: string, patch: Partial<Pass>, key?: string): void;
   removePass(passId: string): void;
 }
@@ -106,7 +122,9 @@ interface State {
 export const useStore = create<State>()((set, get) => {
   /** After the play changes, keep the playhead on a valid phase start. */
   const settle = () => {
-    const { play, phaseIdx, selected, popover } = get();
+    const { play, phaseIdx, selected, popover, activeOption } = get();
+    const optionExists = play.phases.some((ph) => ph.passes.some((p) => p.id === activeOption && p.altOf));
+    if (activeOption && !optionExists) set({ activeOption: null });
     const tl = timelineOf(play);
     const i = clamp(phaseIdx, 0, tl.phases.length - 1);
     set({
@@ -136,8 +154,10 @@ export const useStore = create<State>()((set, get) => {
     view: 'fit',
     orientation: savedOrientation(),
     exportOpen: false,
+    pickerOpen: false,
     popover: null,
     pending: null,
+    activeOption: null,
     toast: null,
     libraryOpen: false,
 
@@ -170,7 +190,7 @@ export const useStore = create<State>()((set, get) => {
       settle();
     },
     load(play) {
-      set({ play, past: [], future: [], lastKey: null, phaseIdx: 0, time: 0, playing: false, selected: null, popover: null, pending: null });
+      set({ play, past: [], future: [], lastKey: null, phaseIdx: 0, time: 0, playing: false, selected: null, popover: null, pending: null, activeOption: null });
     },
 
     seek(t) {
@@ -213,11 +233,16 @@ export const useStore = create<State>()((set, get) => {
       }
     },
     setExportOpen: (exportOpen) => set({ exportOpen, playing: false }),
+    setPickerOpen: (pickerOpen) => set({ pickerOpen, playing: false }),
     openPopover: (popover) => set({ popover }),
     closePopover: () => set({ popover: null }),
-    startPending(kind) {
+    startPending(kind, altOf) {
       const popover = get().popover;
-      if (popover) set({ pending: { kind, id: popover.id }, popover: null, selected: popover.id });
+      if (popover) set({ pending: { kind, id: popover.id, altOf }, popover: null, selected: popover.id });
+    },
+    setActiveOption(activeOption) {
+      set({ activeOption, playing: false });
+      get().seek(0);
     },
     finishPending() {
       const pending = get().pending;
@@ -236,6 +261,44 @@ export const useStore = create<State>()((set, get) => {
     addPhase() {
       get().commit((p) => p.phases.push({ id: uid(), runs: {}, passes: [], note: '' }));
       get().goPhase(get().play.phases.length - 1);
+    },
+    appendPlay(source) {
+      // Players are matched by team and shirt number. Runs are offsets, so each
+      // player carries on from wherever they finished the previous phase.
+      const key = (p: Player) => `${p.team}:${p.num}`;
+      const here = new Map(get().play.players.map((p) => [key(p), p.id]));
+      const idMap = new Map<string, string>();
+      for (const p of source.players) {
+        const id = here.get(key(p));
+        if (id) idMap.set(p.id, id);
+      }
+      const missing = new Set<string>();
+      const phases = source.phases.map((ph) => ({
+        id: uid(),
+        note: ph.note,
+        runs: Object.fromEntries(
+          Object.entries(ph.runs).flatMap(([id, run]) => {
+            const to = idMap.get(id);
+            if (!to) missing.add(id);
+            return to ? [[to, structuredClone(run)]] : [];
+          }),
+        ),
+        passes: ph.passes.flatMap((pass) => {
+          const to = idMap.get(pass.to);
+          if (!to) missing.add(pass.to);
+          return to ? [{ ...pass, id: uid(), to }] : [];
+        }),
+      }));
+
+      const first = get().play.phases.length;
+      get().commit((p) => p.phases.push(...phases));
+      get().goPhase(first);
+      const label = `${phases.length} phase${phases.length === 1 ? '' : 's'} from “${source.name}”`;
+      get().notify(
+        missing.size
+          ? `Added ${label} · ${missing.size} player${missing.size === 1 ? '' : 's'} not in this play were left out`
+          : `Added ${label}`,
+      );
     },
     deletePhase(i) {
       if (get().play.phases.length <= 1) return;
@@ -314,10 +377,20 @@ export const useStore = create<State>()((set, get) => {
     updatePass(passId, patch, key) {
       get().commit((p) => Object.assign(phase(p).passes.find((x) => x.id === passId)!, patch), key);
     },
+    addOption(altOf, to) {
+      const main = phase(get().play).passes.find((x) => x.id === altOf);
+      if (!main) return;
+      get().commit((p) => {
+        phase(p).passes.push({ id: uid(), to, at: main.at, kind: main.kind, altOf });
+      });
+      const num = get().play.players.find((x) => x.id === to)?.num;
+      get().notify(`Option added: or to #${num}`);
+    },
     removePass(passId) {
+      // Removing a main-line pass takes its options with it.
       get().commit((p) => {
         const ph = phase(p);
-        ph.passes = ph.passes.filter((x) => x.id !== passId);
+        ph.passes = ph.passes.filter((x) => x.id !== passId && x.altOf !== passId);
       });
     },
   };

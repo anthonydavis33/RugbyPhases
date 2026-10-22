@@ -1,4 +1,55 @@
+import type { ReactNode } from 'react';
 import { timelineOf, useStore, type Pending } from '../store';
+import type { Pass } from '../model/types';
+
+/** Show the pitch at `t` seconds into the current phase. */
+function preview(t: number) {
+  const s = useStore.getState();
+  s.seek(timelineOf(s.play).phases[s.phaseIdx].start + t);
+}
+
+/** One pass, kick or option: who it goes to, a timing slider, and delete. */
+function PassRow({
+  pass,
+  label,
+  max,
+  extra,
+  className = '',
+}: {
+  pass: Pass;
+  label: ReactNode;
+  max: number;
+  extra?: ReactNode;
+  className?: string;
+}) {
+  const st = useStore.getState();
+  const to = st.play.players.find((p) => p.id === pass.to);
+  return (
+    <div className={`pb-row ${className}`}>
+      <span className="pb-label">
+        {label}→<span className={`dot small ${to?.team}`}>{to?.num}</span>
+      </span>
+      <input
+        type="range"
+        min={0}
+        max={Math.max(max, Math.ceil(pass.at + 1))}
+        step={0.1}
+        value={pass.at}
+        aria-label={`When the ball goes to #${to?.num}`}
+        onChange={(e) => {
+          const at = Number(e.target.value);
+          st.updatePass(pass.id, { at }, `at:${pass.id}`);
+          preview(at);
+        }}
+      />
+      <span className="muted at">{pass.at.toFixed(1)}s</span>
+      {extra}
+      <button className="icon-btn" onClick={() => st.removePass(pass.id)} aria-label="Delete">
+        ×
+      </button>
+    </div>
+  );
+}
 
 const ACTIONS: { kind: Pending['kind']; label: string; icon: string; key: string; needsBall: boolean }[] = [
   { kind: 'run', label: 'Move', icon: '➜', key: 'M', needsBall: false },
@@ -17,6 +68,7 @@ export function PlayerPopover() {
   const pending = useStore((s) => s.pending);
   const play = useStore((s) => s.play);
   const phaseIdx = useStore((s) => s.phaseIdx);
+  const activeOption = useStore((s) => s.activeOption);
   // Stay open while an action started here is waiting, so the pitch doesn't resize mid-drag.
   const id = pop?.id ?? pending?.id;
   const player = id && play.players.find((p) => p.id === id);
@@ -24,18 +76,12 @@ export function PlayerPopover() {
 
   const st = useStore.getState();
   const ph = timelineOf(play).phases[phaseIdx];
-  const byId = Object.fromEntries(play.players.map((p) => [p.id, p]));
   const passes = ph.passes.filter((pt) => pt.from === player.id);
+  const raw = play.phases[phaseIdx].passes;
   const run = play.phases[phaseIdx].runs[player.id];
   const max = Math.ceil(ph.duration + 1);
   // New passes go from whoever ends up with the ball, so only they can add one.
   const hasBall = ph.endHolder === player.id;
-
-  /** Show the pitch at `t` seconds into this phase. */
-  const preview = (t: number) => {
-    const s = useStore.getState();
-    s.seek(timelineOf(s.play).phases[s.phaseIdx].start + t);
-  };
 
   const close = () => {
     st.cancelPending();
@@ -79,30 +125,58 @@ export function PlayerPopover() {
       </div>
 
       {passes.map((pt) => {
-        const to = byId[pt.pass.to];
+        // Edit the stored pass, not the resolved one (which may have an option swapped in).
+        const main = raw.find((p) => p.id === pt.pass.id) ?? pt.pass;
+        const options = raw.filter((p) => p.altOf === main.id);
+        const addingOption = pending?.kind === 'option' && pending.altOf === main.id;
         return (
-          <div key={pt.pass.id} className="pb-row">
-            <span className="pb-label">
-              <span className={`kind ${pt.pass.kind}`}>{pt.pass.kind === 'kick' ? 'Kick' : 'Pass'}</span>→
-              <span className={`dot small ${to?.team}`}>{to?.num}</span>
-            </span>
-            <input
-              type="range"
-              min={0}
-              max={Math.max(max, Math.ceil(pt.pass.at + 1))}
-              step={0.1}
-              value={pt.pass.at}
-              aria-label={`When #${player.num} ${pt.pass.kind}es to #${to?.num}`}
-              onChange={(e) => {
-                const at = Number(e.target.value);
-                st.updatePass(pt.pass.id, { at }, `at:${pt.pass.id}`);
-                preview(at);
-              }}
+          <div key={main.id} className="pb-group">
+            <PassRow
+              pass={main}
+              label={<span className={`kind ${main.kind}`}>{main.kind === 'kick' ? 'Kick' : 'Pass'}</span>}
+              max={max}
+              extra={
+                <button
+                  className={`small${addingOption ? ' on' : ''}`}
+                  onClick={() => (addingOption ? st.finishPending() : (pending && st.finishPending(), st.startPending('option', main.id)))}
+                  title="Add an alternative receiver for this pass"
+                >
+                  + Option
+                </button>
+              }
             />
-            <span className="muted at">{pt.pass.at.toFixed(1)}s</span>
-            <button className="icon-btn" onClick={() => st.removePass(pt.pass.id)} aria-label="Delete">
-              ×
-            </button>
+            {options.map((opt) => (
+              <PassRow
+                key={opt.id}
+                pass={opt}
+                className="option-row"
+                label={
+                  <>
+                    <span className="muted">or</span>
+                    <button
+                      className={`kind ${opt.kind} kind-toggle`}
+                      onClick={() => st.updatePass(opt.id, { kind: opt.kind === 'kick' ? 'pass' : 'kick' })}
+                      title="Switch between pass and kick"
+                    >
+                      {opt.kind === 'kick' ? 'Kick' : 'Pass'}
+                    </button>
+                  </>
+                }
+                max={max}
+                extra={
+                  <button
+                    className={`small${activeOption === opt.id ? ' on' : ''}`}
+                    onClick={() => {
+                      st.setActiveOption(opt.id);
+                      st.togglePlay();
+                    }}
+                    title="Play this option"
+                  >
+                    ▶
+                  </button>
+                }
+              />
+            ))}
           </div>
         );
       })}

@@ -6,6 +6,7 @@ import { Inspector } from './components/Inspector';
 import { Library } from './components/Library';
 import { ExportDialog } from './components/ExportDialog';
 import { PlayerPopover } from './components/PlayerPopover';
+import { PhasePicker } from './components/PhasePicker';
 
 export function App() {
   const playing = useStore((s) => s.playing);
@@ -80,6 +81,7 @@ export function App() {
       <Toast />
       <Library />
       <ExportDialog />
+      <PhasePicker />
     </div>
   );
 }

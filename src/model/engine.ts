@@ -30,7 +30,10 @@ export interface PhaseTrack {
   startHolder: string | null;
   endHolder: string | null;
   runs: Record<string, RunTrack>;
+  /** The ball's path as played (main line, or with the chosen option swapped in). */
   passes: PassTrack[];
+  /** Alternatives not being played, drawn as option lines from the same passer. */
+  options: PassTrack[];
 }
 
 export interface Timeline {
@@ -66,11 +69,14 @@ export function positionIn(ph: PhaseTrack, id: string, t: number): Vec {
 export const flightTime = (kind: BallAction, d: number) =>
   kind === 'kick' ? clamp(d / 20, 0.9, 3) : clamp(d / 14, 0.3, 1.4);
 
+const kickHeight = (kind: BallAction, d: number) => (kind === 'kick' ? clamp(d * 0.35, 3, 18) : 0);
+
 /**
  * Resolve a play into absolute timings. Each phase starts from where the
  * previous one ended, and lasts until every run and pass has finished.
+ * `option` is the id of an option pass to play instead of its main-line pass.
  */
-export function buildTimeline(play: Play): Timeline {
+export function buildTimeline(play: Play, option: string | null = null): Timeline {
   let pos: Record<string, Vec> = {};
   for (const p of play.players) pos[p.id] = { x: p.x, y: p.y };
   let holder = play.ball && pos[play.ball] ? play.ball : null;
@@ -86,6 +92,7 @@ export function buildTimeline(play: Play): Timeline {
       endHolder: holder,
       runs: {},
       passes: [],
+      options: [],
     };
     let end = 0;
 
@@ -98,15 +105,33 @@ export function buildTimeline(play: Play): Timeline {
       end = Math.max(end, e);
     }
 
+    // The main line, with the chosen option (if it's in this phase) swapped in.
+    // The swapped pass keeps the main pass's id so editing still targets it.
+    const alts = phase.passes.filter((p) => p.altOf);
+    const chosen = option ? alts.find((p) => p.id === option) : undefined;
+    const main = phase.passes
+      .filter((p) => !p.altOf)
+      .map((p) => (chosen && p.id === chosen.altOf ? { ...p, to: chosen.to, kind: chosen.kind, at: chosen.at } : p))
+      .sort((a, b) => a.at - b.at);
+
     let h = holder;
-    for (const pass of [...phase.passes].sort((a, b) => a.at - b.at)) {
+    for (const pass of main) {
       if (!h || !pos[pass.to] || pass.to === h) continue;
       const d = dist(positionIn(ph, h, pass.at), positionIn(ph, pass.to, pass.at));
       const flight = flightTime(pass.kind, d);
-      const height = pass.kind === 'kick' ? clamp(d * 0.35, 3, 18) : 0;
-      ph.passes.push({ pass, from: h, flight, height });
+      ph.passes.push({ pass, from: h, flight, height: kickHeight(pass.kind, d) });
       h = pass.to;
       end = Math.max(end, pass.at + flight);
+    }
+
+    // Options not being played (including the main pass an option replaced) are
+    // drawn from whoever throws the pass they belong to. They don't affect timing.
+    const shown = [...alts.filter((p) => p !== chosen), ...phase.passes.filter((p) => p.id === chosen?.altOf)];
+    for (const alt of shown) {
+      const base = ph.passes.find((t) => t.pass.id === (alt.altOf ?? alt.id));
+      if (!base || !pos[alt.to] || alt.to === base.from) continue;
+      const d = dist(positionIn(ph, base.from, alt.at), positionIn(ph, alt.to, alt.at));
+      ph.options.push({ pass: alt, from: base.from, flight: flightTime(alt.kind, d), height: kickHeight(alt.kind, d) });
     }
     ph.endHolder = h;
     ph.duration = Math.max(MIN_PHASE, end + HOLD);

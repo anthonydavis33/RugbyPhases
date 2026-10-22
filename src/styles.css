@@ -511,6 +511,25 @@ input[type='range'] {
   flex-direction: column;
   min-width: 0;
 }
+.saved-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+}
+.saved-head h4 {
+  margin: 0 auto 0 0;
+}
+.saved .pick,
+.select-all input {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  accent-color: var(--accent);
+}
+.select-all {
+  font-size: 14px;
+}
 .saved li.current strong::after {
   content: ' · open';
   color: var(--accent);
@@ -582,6 +601,53 @@ input[type='range'] {
 }
 .kind.run {
   background: #93c5fd;
+}
+.pb-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pb-row button.small {
+  min-height: 28px;
+  padding: 2px 8px;
+  font-size: 12px;
+}
+.pb-row button.small.on,
+.options-row button.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #05230f;
+  font-weight: 600;
+}
+.option-row {
+  padding-left: 14px;
+  border-left: 2px solid var(--option);
+  margin-left: 6px;
+}
+.kind-toggle {
+  min-height: 0;
+  border: none;
+  cursor: pointer;
+}
+.kind-toggle.pass,
+.kind-toggle.kick {
+  color: #1a1400;
+}
+.options-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.options-row button {
+  min-height: 32px;
+  padding: 4px 10px;
+  font-size: 13px;
+}
+.options-row button.opt:not(.on) {
+  border-color: var(--option);
+  color: var(--option);
 }
 
 /* ---------- export ---------- */

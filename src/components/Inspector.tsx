@@ -12,6 +12,7 @@ export function Inspector() {
   const play = useStore((s) => s.play);
   const phaseIdx = useStore((s) => s.phaseIdx);
   const selected = useStore((s) => s.selected);
+  useStore((s) => s.activeOption); // the chosen option changes the ball list
   const st = useStore.getState();
 
   const ph = timelineOf(play).phases[phaseIdx];
