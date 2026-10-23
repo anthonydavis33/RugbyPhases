@@ -3,7 +3,7 @@ import { join, normalize, sep } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 
-const SAMPLES = join(__dirname, 'samples');
+const SAMPLES = join(import.meta.dirname, 'samples');
 const TYPES: Record<string, string> = { '.mp4': 'video/mp4', '.json': 'application/json' };
 
 /**
@@ -43,6 +43,8 @@ function localSamples(): Plugin {
 }
 
 export default defineConfig({
+  // Relative asset paths, so the build works from any folder (e.g. GitHub Pages' /RugbyPhases/).
+  base: './',
   plugins: [react(), localSamples()],
   // host: true lets an iPad or phone on the same Wi-Fi open the dev server.
   server: { host: true, port: 5173 },
