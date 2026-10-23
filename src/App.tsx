@@ -7,8 +7,16 @@ import { Library } from './components/Library';
 import { ExportDialog } from './components/ExportDialog';
 import { PlayerPopover } from './components/PlayerPopover';
 import { PhasePicker } from './components/PhasePicker';
+import { FilmApp } from './film/FilmApp';
+import { useFilm } from './film/store';
+import './film/film.css';
 
 export function App() {
+  const mode = useFilm((s) => s.mode);
+  return mode === 'film' ? <FilmApp /> : <PlaysApp />;
+}
+
+function PlaysApp() {
   const playing = useStore((s) => s.playing);
 
   useEffect(() => {
@@ -40,6 +48,12 @@ export function App() {
         st.redo();
       } else if (mod) {
         return;
+      } else if (e.key === '+' || e.key === '=') {
+        st.zoomBy(1.25);
+      } else if (e.key === '-' || e.key === '_') {
+        st.zoomBy(1 / 1.25);
+      } else if (e.key === '0') {
+        st.fitView('play');
       } else if (e.key === ' ') {
         e.preventDefault();
         st.togglePlay();

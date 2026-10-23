@@ -140,6 +140,21 @@
   fill: var(--kick);
 }
 
+/* Grabbing a run line to reshape it (editor only, never in exports). */
+.run-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  cursor: grab;
+}
+.run-handle {
+  fill: #fff;
+  stroke: #0b1220;
+  stroke-width: 0.15;
+  cursor: grab;
+}
+
 /* Options: alternative passes and kicks that aren't being played. */
 .option {
   fill: none;

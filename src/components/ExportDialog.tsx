@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { useStore } from '../store';
+import { timelineOf, useStore } from '../store';
+import { cameraRect, fitBox, viewBoxOf } from '../model/camera';
 import type { ExportFormat } from '../export/exporter';
 
 type Status =
@@ -18,8 +19,11 @@ export function ExportDialog() {
 
 function ExportPanel() {
   const play = useStore((s) => s.play);
-  const view = useStore((s) => s.view);
+  const camera = useStore((s) => s.camera);
+  const stage = useStore((s) => s.stage);
   const orientation = useStore((s) => s.orientation);
+  // Film exactly what's on screen.
+  const viewBox = camera ? cameraRect(camera, stage) : viewBoxOf(fitBox(timelineOf(play)), orientation === 'ns');
   const option = useStore((s) => s.activeOption);
   const close = () => useStore.getState().setExportOpen(false);
 
@@ -53,7 +57,7 @@ function ExportPanel() {
       const m = await loadExporter();
       const blob = await m.exportPlay(
         play,
-        { format, lines, notes, title, view, orientation, option },
+        { format, lines, notes, title, viewBox, orientation, option },
         (progress) => setStatus({ kind: 'working', progress }),
         ac.signal,
       );
@@ -136,8 +140,7 @@ function ExportPanel() {
               Play name and phase
             </label>
             <p className="muted">
-              Uses the current view: {orientation === 'ns' ? 'north–south' : 'east–west'},{' '}
-              {view === 'full' ? 'full pitch' : 'zoomed to the play'}
+              Films exactly what’s on screen now — zoom and pan the pitch first to frame it
               {option ? ', playing the selected option' : ''}.
             </p>
 

@@ -64,5 +64,52 @@ export function chaikin(pts: Vec[], iterations = 2): Vec[] {
 /** Turn a wobbly finger-drawn stroke into a clean running line. */
 export const smoothStroke = (raw: Vec[]) => chaikin(simplify(raw, 0.6), 2);
 
-export const toPath = (pts: Vec[]) =>
+/** The closest point on a polyline to `p`: how far along it is (metres) and how far away. */
+export function nearestOnPath(pts: Vec[], p: Vec): { s: number; d: number } {
+  let best = { s: 0, d: dist(pts[0], p) };
+  let walked = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1];
+    const b = pts[i];
+    const len = dist(a, b);
+    const t = len ? clamp(((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / (len * len), 0, 1) : 0;
+    const d = dist(lerp(a, b, t), p);
+    if (d < best.d) best = { s: walked + t * len, d };
+    walked += len;
+  }
+  return best;
+}
+
+/** Re-space a polyline's points about `step` metres apart, so it can bend smoothly anywhere. */
+export function resample(pts: Vec[], step: number): Vec[] {
+  const len = pathLength(pts);
+  if (len === 0) return [pts[0]];
+  const n = Math.max(1, Math.round(len / step));
+  return Array.from({ length: n + 1 }, (_, i) => pointAlong(pts, (len * i) / n));
+}
+
+const smoothstep = (w: number) => w * w * (3 - 2 * w);
+
+/**
+ * Reshape a path by dragging the point `grab` metres along it by `delta`.
+ * Everything up to `from` metres stays put. Grabbing the end moves the
+ * destination; grabbing anywhere else bends the line around that point and
+ * keeps the end where it was.
+ */
+export function warpPath(pts: Vec[], delta: Vec, from: number, grab: number): Vec[] {
+  const cum = [0];
+  for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + dist(pts[i - 1], pts[i]));
+  const len = cum[cum.length - 1];
+  const g = clamp(grab, from + 0.01, len);
+  const end = len - g < 0.01;
+  return pts.map((q, i) => {
+    const s = cum[i];
+    let w = 0;
+    if (s > from) w = end ? (s - from) / (len - from) : s <= g ? (s - from) / (g - from) : (len - s) / (len - g);
+    w = smoothstep(clamp(w, 0, 1));
+    return { x: q.x + delta.x * w, y: q.y + delta.y * w };
+  });
+}
+
+export const toPath =(pts: Vec[]) =>
   pts.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join('');

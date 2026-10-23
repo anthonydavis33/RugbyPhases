@@ -2,11 +2,11 @@ import { create } from 'zustand';
 import type { BallAction, Pass, Play, Player, Run, Team, Vec } from './model/types';
 import { buildTimeline, phaseIndexAt, type Timeline } from './model/engine';
 import { clamp } from './model/geometry';
+import { FULL, cameraCentre, fitBox, fitCamera, panCamera, zoomCamera, type Camera, type Size } from './model/camera';
 import { uid } from './model/uid';
 import { makePreset } from './model/presets';
 
 export type Tool = 'select' | 'run' | 'pass' | 'kick';
-export type View = 'full' | 'fit';
 /** ns: attack runs up the screen. ew: attack runs left to right. */
 export type Orientation = 'ns' | 'ew';
 
@@ -66,7 +66,10 @@ interface State {
 
   tool: Tool;
   selected: string | null;
-  view: View;
+  /** Set by the coach (zoom, pan, fit); never changed automatically by edits. Null until first fitted. */
+  camera: Camera | null;
+  /** Pixel size of the pitch area. */
+  stage: Size;
   orientation: Orientation;
   exportOpen: boolean;
   pickerOpen: boolean;
@@ -89,7 +92,10 @@ interface State {
 
   setTool(tool: Tool): void;
   select(id: string | null): void;
-  setView(view: View): void;
+  setStage(size: Size): void;
+  fitView(target: 'play' | 'full'): void;
+  zoomBy(factor: number, at?: { x: number; y: number }): void;
+  panBy(dx: number, dy: number): void;
   setOrientation(o: Orientation): void;
   setExportOpen(open: boolean): void;
   setPickerOpen(open: boolean): void;
@@ -110,7 +116,7 @@ interface State {
   removePlayer(id: string): void;
   updatePlayer(id: string, patch: Partial<Player>, key?: string): void;
   giveBall(id: string): void;
-  setRun(id: string, absPts: Vec[]): void;
+  setRun(id: string, absPts: Vec[], key?: string): void;
   updateRun(id: string, patch: Partial<Run>, key?: string): void;
   clearRun(id: string): void;
   addPass(to: string, kind: BallAction): void;
@@ -120,16 +126,21 @@ interface State {
 }
 
 export const useStore = create<State>()((set, get) => {
-  /** After the play changes, keep the playhead on a valid phase start. */
-  const settle = () => {
-    const { play, phaseIdx, selected, popover, activeOption } = get();
+  /**
+   * After the play changes, keep the playhead at the same moment of the same
+   * phase (so edits made while scrubbed stay in view), clamped to the phase.
+   */
+  const settle = (prev: Play) => {
+    const { play, phaseIdx, selected, popover, activeOption, time } = get();
+    const before = timelineOf(prev).phases[clamp(phaseIdx, 0, prev.phases.length - 1)];
+    const local = before ? Math.max(0, time - before.start) : 0;
     const optionExists = play.phases.some((ph) => ph.passes.some((p) => p.id === activeOption && p.altOf));
     if (activeOption && !optionExists) set({ activeOption: null });
     const tl = timelineOf(play);
     const i = clamp(phaseIdx, 0, tl.phases.length - 1);
     set({
       phaseIdx: i,
-      time: tl.phases[i].start,
+      time: tl.phases[i].start + Math.min(local, tl.phases[i].duration),
       playing: false,
       selected: selected && play.players.some((p) => p.id === selected) ? selected : null,
       popover: popover && play.players.some((p) => p.id === popover.id) ? popover : null,
@@ -151,7 +162,8 @@ export const useStore = create<State>()((set, get) => {
 
     tool: 'select',
     selected: null,
-    view: 'fit',
+    camera: null,
+    stage: { w: 0, h: 0 },
     orientation: savedOrientation(),
     exportOpen: false,
     pickerOpen: false,
@@ -175,22 +187,22 @@ export const useStore = create<State>()((set, get) => {
         lastKey: key ?? null,
         lastAt: now,
       });
-      settle();
+      settle(play);
     },
     undo() {
       const { past, play, future } = get();
       if (!past.length) return;
       set({ play: past[past.length - 1], past: past.slice(0, -1), future: [play, ...future], lastKey: null });
-      settle();
+      settle(play);
     },
     redo() {
       const { past, play, future } = get();
       if (!future.length) return;
       set({ play: future[0], past: [...past, play], future: future.slice(1), lastKey: null });
-      settle();
+      settle(play);
     },
     load(play) {
-      set({ play, past: [], future: [], lastKey: null, phaseIdx: 0, time: 0, playing: false, selected: null, popover: null, pending: null, activeOption: null });
+      set({ play, past: [], future: [], lastKey: null, phaseIdx: 0, time: 0, playing: false, selected: null, popover: null, pending: null, activeOption: null, camera: null });
     },
 
     seek(t) {
@@ -223,9 +235,24 @@ export const useStore = create<State>()((set, get) => {
 
     setTool: (tool) => set({ tool, popover: null, pending: null }),
     select: (selected) => set({ selected }),
-    setView: (view) => set({ view }),
+    setStage: (stage) => set({ stage }),
+    fitView(target) {
+      const { play, orientation, stage } = get();
+      if (stage.w < 2 || stage.h < 2) return;
+      const box = target === 'full' ? FULL : fitBox(timelineOf(play, null));
+      set({ camera: fitCamera(box, orientation === 'ns', stage) });
+    },
+    zoomBy(factor, at) {
+      const { camera, stage, orientation } = get();
+      if (!camera) return;
+      set({ camera: zoomCamera(camera, factor, at ?? { x: stage.w / 2, y: stage.h / 2 }, stage, orientation === 'ns') });
+    },
+    panBy(dx, dy) {
+      const { camera, stage, orientation } = get();
+      if (camera) set({ camera: panCamera(camera, dx, dy, stage, orientation === 'ns') });
+    },
     setOrientation(orientation) {
-      set({ orientation });
+      set({ orientation, camera: null });
       try {
         localStorage.setItem(ORIENTATION_KEY, orientation);
       } catch {
@@ -306,14 +333,21 @@ export const useStore = create<State>()((set, get) => {
       get().goPhase(Math.min(i, get().play.phases.length - 1));
     },
     addPlayer(team) {
-      const { play, view, phaseIdx } = get();
+      const { play, camera, stage, orientation, phaseIdx } = get();
       const taken = new Set(play.players.filter((p) => p.team === team).map((p) => p.num));
       let num = 1;
       while (taken.has(num)) num++;
       const id = uid();
-      const cx = view === 'fit' ? 45 : 50;
+      // Drop new players in the middle of what's on screen.
+      const c = camera ? cameraCentre(camera, stage, orientation === 'ns') : { x: 50, y: 35 };
       get().commit((p) =>
-        p.players.push({ id, team, num, x: cx + (team === 'attack' ? -6 : 6), y: 32 + Math.random() * 6 }),
+        p.players.push({
+          id,
+          team,
+          num,
+          x: clamp(c.x + (team === 'attack' ? -4 : 4), -10, 110),
+          y: clamp(c.y + Math.random() * 6 - 3, 0, 70),
+        }),
       );
       set({ selected: id, tool: 'select' });
       if (phaseIdx > 0) get().notify('New players are placed in phase 1 — go there to position them');
@@ -336,14 +370,14 @@ export const useStore = create<State>()((set, get) => {
         p.ball = id;
       });
     },
-    setRun(id, absPts) {
+    setRun(id, absPts, key) {
       const origin = timelineOf(get().play).phases[get().phaseIdx].startPos[id];
       const pts = absPts.slice(1).map((v) => ({ x: v.x - origin.x, y: v.y - origin.y }));
       get().commit((p) => {
         const ph = phase(p);
         const old = ph.runs[id];
         ph.runs[id] = { pts, delay: old?.delay ?? 0, speed: old?.speed ?? 'run' };
-      });
+      }, key);
     },
     updateRun(id, patch, key) {
       get().commit((p) => Object.assign(phase(p).runs[id], patch), key);

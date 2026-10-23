@@ -46,7 +46,8 @@ export const runPath = (origin: Vec, run: Run): Vec[] => [
   ...run.pts.map((p) => ({ x: origin.x + p.x, y: origin.y + p.y })),
 ];
 
-function distanceAt(run: Run, len: number, t: number) {
+/** How far along their run (metres) a player is at phase-local time `t`. */
+export function distanceAt(run: Run, len: number, t: number) {
   const tt = t - run.delay;
   if (tt <= 0) return 0;
   const v = SPEEDS[run.speed];
@@ -66,7 +67,20 @@ export function positionIn(ph: PhaseTrack, id: string, t: number): Vec {
   return pointAlong(r.path, distanceAt(r.run, r.len, t));
 }
 
-export const flightTime = (kind: BallAction, d: number) =>
+/** The part of a run still ahead of the player at phase-local time `t` (the whole run before they set off). */
+export function remainingPath(r: RunTrack, t: number): Vec[] {
+  const d = distanceAt(r.run, r.len, t);
+  if (d <= 0) return r.path;
+  let walked = 0;
+  for (let i = 1; i < r.path.length; i++) {
+    const seg = dist(r.path[i - 1], r.path[i]);
+    if (walked + seg >= d) return [lerp(r.path[i - 1], r.path[i], seg ? (d - walked) / seg : 1), ...r.path.slice(i)];
+    walked += seg;
+  }
+  return [r.path[r.path.length - 1]];
+}
+
+export const flightTime =(kind: BallAction, d: number) =>
   kind === 'kick' ? clamp(d / 20, 0.9, 3) : clamp(d / 14, 0.3, 1.4);
 
 const kickHeight = (kind: BallAction, d: number) => (kind === 'kick' ? clamp(d * 0.35, 3, 18) : 0);
@@ -115,13 +129,17 @@ export function buildTimeline(play: Play, option: string | null = null): Timelin
       .sort((a, b) => a.at - b.at);
 
     let h = holder;
-    for (const pass of main) {
-      if (!h || !pos[pass.to] || pass.to === h) continue;
+    /** When the current holder actually has the ball: nobody passes before they've caught it. */
+    let ready = 0;
+    for (const raw of main) {
+      if (!h || !pos[raw.to] || raw.to === h) continue;
+      const pass = raw.at < ready ? { ...raw, at: ready } : raw;
       const d = dist(positionIn(ph, h, pass.at), positionIn(ph, pass.to, pass.at));
       const flight = flightTime(pass.kind, d);
       ph.passes.push({ pass, from: h, flight, height: kickHeight(pass.kind, d) });
       h = pass.to;
-      end = Math.max(end, pass.at + flight);
+      ready = pass.at + flight;
+      end = Math.max(end, ready);
     }
 
     // Options not being played (including the main pass an option replaced) are
@@ -181,9 +199,11 @@ export function frameAt(tl: Timeline, t: number): Frame {
     if (local < pt.pass.at + pt.flight) {
       const u = (local - pt.pass.at) / pt.flight;
       const from = positionIn(ph, pt.from, pt.pass.at);
-      // Aim at where the receiver is now, so the ball meets a moving runner.
+      // Throw to where the receiver will be when they catch it: a straight line
+      // that meets a moving runner, matching the pass line drawn on the pitch.
+      const catchAt = positionIn(ph, pt.pass.to, pt.pass.at + pt.flight);
       ball = {
-        pos: lerp(from, players[pt.pass.to], u),
+        pos: lerp(from, catchAt, u),
         height: 4 * pt.height * u * (1 - u),
         holder: null,
         flying: pt,

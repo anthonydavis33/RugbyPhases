@@ -1,5 +1,6 @@
 import { timelineOf, useStore, type Tool } from '../store';
 import { shareUrl } from '../storage';
+import { ModeTabs } from './ModeTabs';
 
 export function TopBar() {
   const name = useStore((s) => s.play.name);
@@ -22,8 +23,8 @@ export function TopBar() {
     <header className="topbar">
       <div className="brand">
         <span className="logo">◖◗</span>
-        <span className="brand-name">Rugby Phases</span>
       </div>
+      <ModeTabs />
       <input
         className="play-name"
         value={name}
@@ -54,7 +55,6 @@ const TOOLS: { tool: Tool; label: string; icon: string; key: string }[] = [
 
 export function Toolbar() {
   const tool = useStore((s) => s.tool);
-  const view = useStore((s) => s.view);
   const orientation = useStore((s) => s.orientation);
   const canUndo = useStore((s) => s.past.length > 0);
   const canRedo = useStore((s) => s.future.length > 0);
@@ -90,8 +90,19 @@ export function Toolbar() {
         <button onClick={st.redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z)">
           ↷
         </button>
-        <button onClick={() => st.setView(view === 'full' ? 'fit' : 'full')}>
-          {view === 'full' ? 'Zoom to play' : 'Full pitch'}
+      </div>
+      <div className="group zoom">
+        <button onClick={() => st.zoomBy(1 / 1.25)} title="Zoom out (−)" aria-label="Zoom out">
+          −
+        </button>
+        <button onClick={() => st.zoomBy(1.25)} title="Zoom in (+)" aria-label="Zoom in">
+          +
+        </button>
+        <button onClick={() => st.fitView('play')} title="Fit the play on screen (0)">
+          Fit
+        </button>
+        <button onClick={() => st.fitView('full')} title="Show the whole pitch">
+          Full
         </button>
         <button
           onClick={() => st.setOrientation(orientation === 'ns' ? 'ew' : 'ns')}

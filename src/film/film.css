@@ -1,0 +1,264 @@
+/* ---------- mode tabs (shared top bar) ---------- */
+
+.mode-tabs {
+  display: flex;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 2px;
+  flex: none;
+}
+.mode-tabs button {
+  min-height: 32px;
+  padding: 4px 12px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+}
+.mode-tabs button.on {
+  background: var(--panel-2);
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* ---------- film layout ---------- */
+
+.film-app {
+  height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) 300px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'top top top'
+    'video board panel'
+    'transport transport panel';
+}
+.film-app .topbar {
+  grid-area: top;
+}
+.film-app .film-video {
+  grid-area: video;
+  position: relative;
+  min-height: 0;
+  background: #000;
+}
+.film-app .film-board {
+  grid-area: board;
+  position: relative;
+  min-height: 0;
+  background: var(--surround);
+  border-left: 1px solid var(--border);
+}
+.film-app .film-transport {
+  grid-area: transport;
+}
+.film-transport .transport > button:not(.play-btn):not(.rate) {
+  min-width: 38px;
+  padding: 0;
+  font-size: 18px;
+}
+.film-app .film-panel {
+  grid-area: panel;
+}
+
+/* ---------- video and overlay ---------- */
+
+.video-pane {
+  position: absolute;
+  inset: 0;
+}
+.video-pane video,
+.video-pane .video-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.video-pane video {
+  object-fit: contain;
+}
+.video-pane.calibrating .video-overlay {
+  cursor: crosshair;
+}
+.video-pane.empty {
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  text-align: center;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.pitch-overlay polyline {
+  fill: none;
+  stroke: #22d3ee;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.85;
+}
+.pitch-overlay polyline.dashed {
+  stroke-dasharray: 16 12;
+}
+.calib-mark circle {
+  fill: rgba(253, 224, 71, 0.9);
+  stroke: #0b1220;
+  stroke-width: 2;
+}
+.calib-mark text {
+  fill: #0b1220;
+  font: 700 16px system-ui, sans-serif;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+.calib-mark .residual {
+  stroke: #f43f5e;
+  stroke-width: 3;
+}
+.calib-mark.pitch circle {
+  stroke-width: 0.25;
+}
+.calib-mark.pitch text {
+  font-size: 1.6px;
+}
+.calib-pending {
+  fill: none;
+  stroke: #fde047;
+  stroke-width: 3;
+  stroke-dasharray: 6 4;
+}
+.film-pitch .calib-pending {
+  stroke-width: 0.35;
+  stroke-dasharray: 0.8 0.5;
+}
+.overlay-source {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: rgba(8, 15, 28, 0.8);
+  color: #a5f3fc;
+  pointer-events: none;
+}
+.overlay-source.nearest {
+  color: #fde68a;
+}
+.calib-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(8, 15, 28, 0.85);
+  font-size: 14px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* ---------- pitch side ---------- */
+
+.film-pitch {
+  position: absolute;
+  inset: 0;
+}
+.film-pitch svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.film-pitch.picking svg {
+  cursor: crosshair;
+}
+.camera-shot {
+  fill: rgba(34, 211, 238, 0.12);
+  stroke: rgba(34, 211, 238, 0.7);
+  stroke-width: 0.3;
+}
+.film-pitch-note {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  max-width: calc(100% - 24px);
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(8, 15, 28, 0.8);
+  font-size: 13px;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* ---------- panel ---------- */
+
+.film-panel .steps {
+  margin: 0 0 8px;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.keyframes,
+.tracks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.keyframes li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.keyframe-ticks span {
+  background: #fde047;
+  opacity: 1;
+}
+.tracks li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.tracks li.on {
+  background: var(--panel-2);
+}
+.tracks select {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+}
+.tracks input {
+  width: 64px !important;
+  flex: none;
+  padding: 6px !important;
+}
+
+@media (max-width: 820px) {
+  .film-app {
+    height: auto;
+    min-height: 100%;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto auto auto;
+    grid-template-areas: 'top' 'video' 'board' 'transport' 'panel';
+  }
+  .film-video {
+    aspect-ratio: 16 / 9;
+  }
+  .film-board {
+    height: 55dvh;
+    border-left: none;
+  }
+}

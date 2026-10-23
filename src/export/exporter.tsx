@@ -5,8 +5,9 @@ import sceneCss from '../scene.css?raw';
 import { buildTimeline, frameAt, type Timeline } from '../model/engine';
 import { clamp } from '../model/geometry';
 import type { Play } from '../model/types';
-import { FULL, Scene, fitBox, viewBoxOf } from '../components/Scene';
-import type { Orientation, View } from '../store';
+import { Scene } from '../components/Scene';
+import type { ViewRect } from '../model/camera';
+import type { Orientation } from '../store';
 
 export type ExportFormat = 'mp4' | 'gif';
 
@@ -15,7 +16,8 @@ export interface ExportOptions {
   lines: boolean;
   notes: boolean;
   title: boolean;
-  view: View;
+  /** The part of the pitch to film, in view space: what's on screen when exporting. */
+  viewBox: ViewRect;
   orientation: Orientation;
   /** Option pass to play instead of the main line (see buildTimeline). */
   option: string | null;
@@ -69,7 +71,7 @@ function loadSvg(svg: string): Promise<HTMLImageElement> {
 class FrameRenderer {
   readonly canvas = document.createElement('canvas');
   readonly ctx: CanvasRenderingContext2D;
-  private readonly vb: ReturnType<typeof viewBoxOf>;
+  private readonly vb: ViewRect;
   private readonly vertical: boolean;
   private lastSvg = '';
 
@@ -79,7 +81,7 @@ class FrameRenderer {
     private readonly opts: ExportOptions,
   ) {
     this.vertical = opts.orientation === 'ns';
-    this.vb = viewBoxOf(opts.view === 'full' ? FULL : fitBox(tl), this.vertical);
+    this.vb = opts.viewBox;
     const scale = SETTINGS[opts.format].maxDim / Math.max(this.vb.w, this.vb.h);
     this.canvas.width = even(this.vb.w * scale);
     this.canvas.height = even(this.vb.h * scale);
